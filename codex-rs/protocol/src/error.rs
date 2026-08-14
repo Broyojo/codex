@@ -54,6 +54,11 @@ pub enum SandboxErr {
     #[error("seccomp backend error")]
     SeccompBackend(#[from] seccompiler::BackendError),
 
+    /// Seccomp filtering is not available for the current architecture
+    #[cfg(target_os = "linux")]
+    #[error("seccomp network filtering is not supported on this architecture")]
+    SeccompUnsupportedArch,
+
     /// Command timed out
     #[error("command timed out")]
     Timeout { output: Box<ExecToolCallOutput> },

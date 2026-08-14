@@ -2,7 +2,6 @@
 //!
 //! Filesystem restrictions are enforced by bubblewrap in `linux_run_main`.
 //! Landlock helpers remain available here as legacy/backup utilities.
-use std::collections::BTreeMap;
 use std::path::Path;
 
 use codex_protocol::error::CodexErr;
@@ -21,14 +20,23 @@ use landlock::Compatible;
 use landlock::Ruleset;
 use landlock::RulesetAttr;
 use landlock::RulesetCreatedAttr;
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use seccompiler::BpfProgram;
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use seccompiler::SeccompAction;
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use seccompiler::SeccompCmpArgLen;
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use seccompiler::SeccompCmpOp;
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use seccompiler::SeccompCondition;
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use seccompiler::SeccompFilter;
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use seccompiler::SeccompRule;
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use seccompiler::TargetArch;
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use seccompiler::apply_filter;
 
 /// Apply sandbox policies inside this thread so only the child inherits
@@ -166,9 +174,12 @@ fn install_filesystem_landlock_rules_on_current_thread(
 ///
 /// The filter is applied to the current thread so only the sandboxed child
 /// inherits it.
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 fn install_network_seccomp_filter_on_current_thread(
     mode: NetworkSeccompMode,
 ) -> std::result::Result<(), SandboxErr> {
+    use std::collections::BTreeMap;
+
     fn deny_syscall(rules: &mut BTreeMap<i64, Vec<SeccompRule>>, nr: i64) {
         rules.insert(nr, vec![]); // empty rule vec = unconditional match
     }
@@ -265,6 +276,16 @@ fn install_network_seccomp_filter_on_current_thread(
     apply_filter(&prog)?;
 
     Ok(())
+}
+
+/// `seccompiler` has no BPF backend for this architecture (e.g. 32-bit x86),
+/// so the network filter cannot be enforced. Fail closed instead of running
+/// without network restrictions.
+#[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+fn install_network_seccomp_filter_on_current_thread(
+    _mode: NetworkSeccompMode,
+) -> std::result::Result<(), SandboxErr> {
+    Err(SandboxErr::SeccompUnsupportedArch)
 }
 
 #[cfg(test)]
