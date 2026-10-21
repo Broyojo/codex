@@ -1549,6 +1549,25 @@ async fn run_auto_compact(
         .await?;
         return Ok(true);
     }
+    // A prepared background result is cheaper to adopt than a new agent run.
+    if turn_context
+        .config
+        .features
+        .enabled(Feature::AgentCompaction)
+        && candidate.is_none()
+        && Box::pin(crate::compact_agent::run_agent_compact_task(
+            sess,
+            &step_context,
+            &replacement_step_context,
+            Arc::clone(&world_state),
+            codex_analytics::CompactionTrigger::Auto,
+            reason,
+            phase,
+        ))
+        .await?
+    {
+        return Ok(true);
+    }
 
     match turn_context.provider.capabilities().remote_compaction {
         RemoteCompactionSupport::V2 => {

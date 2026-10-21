@@ -470,6 +470,7 @@ pub enum CompactionReason {
 pub enum CompactionImplementation {
     Responses,
     ResponsesCompactionV2,
+    Agent,
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]

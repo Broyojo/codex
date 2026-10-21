@@ -741,6 +741,9 @@
           "default": null,
           "description": "Optional feature toggles scoped to this profile.",
           "properties": {
+            "agent_compaction": {
+              "type": "boolean"
+            },
             "agent_message_board": {
               "type": "boolean"
             },
@@ -7196,6 +7199,9 @@
       "default": null,
       "description": "Centralized feature flags (new). Prefer this over individual toggles.",
       "properties": {
+        "agent_compaction": {
+          "type": "boolean"
+        },
         "agent_message_board": {
           "type": "boolean"
         },

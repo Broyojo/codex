@@ -59,6 +59,20 @@ impl SessionTask for CompactTask {
             .await?;
             return Ok(None);
         }
+        if ctx.config.features.enabled(Feature::AgentCompaction)
+            && Box::pin(crate::compact_agent::run_agent_compact_task(
+                &session,
+                &step_context,
+                &step_context,
+                Arc::clone(&world_state),
+                codex_analytics::CompactionTrigger::Manual,
+                codex_analytics::CompactionReason::UserRequested,
+                codex_analytics::CompactionPhase::StandaloneTurn,
+            ))
+            .await?
+        {
+            return Ok(None);
+        }
 
         let result = match ctx.provider.capabilities().remote_compaction {
             RemoteCompactionSupport::V2 => {

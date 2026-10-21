@@ -437,6 +437,8 @@ pub enum Feature {
     RemoteCompactionV2,
     /// Prepare remote compaction in the background before the foreground limit is reached.
     AsyncCompaction,
+    /// Compact with a sub-agent that reads the full rollout transcript.
+    AgentCompaction,
     /// Include retained images in the remote compaction context budget.
     CompactionImageBudget,
     /// Retain client-authored developer messages across compacted context windows.
@@ -2119,6 +2121,12 @@ pub const FEATURES: &[FeatureSpec] = &[
     FeatureSpec {
         id: Feature::AsyncCompaction,
         key: "async_compaction",
+        stage: Stage::UnderDevelopment,
+        default_enabled: false,
+    },
+    FeatureSpec {
+        id: Feature::AgentCompaction,
+        key: "agent_compaction",
         stage: Stage::UnderDevelopment,
         default_enabled: false,
     },

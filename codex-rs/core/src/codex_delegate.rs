@@ -11,6 +11,7 @@ use codex_protocol::protocol::Op;
 use codex_protocol::protocol::SessionSource;
 use codex_protocol::protocol::SubAgentSource;
 use codex_protocol::protocol::ThreadSource;
+use codex_protocol::protocol::TurnEnvironmentRequest;
 use codex_protocol::protocol::TurnEnvironmentSelection;
 use codex_protocol::user_input::UserInput;
 use serde_json::Value;
@@ -45,18 +46,59 @@ use codex_protocol::turn_input::TurnStartOptions;
 #[cfg(test)]
 use crate::session::completed_session_loop_termination;
 
+/// Execution environments bound to a delegate thread.
+pub(crate) enum DelegateEnvironments {
+    /// Reuse the parent's existing bindings.
+    Inherit(TurnEnvironmentSnapshot),
+    /// Resolve fresh bindings from these requests instead of the parent's.
+    Explicit(Vec<TurnEnvironmentRequest>),
+}
+
 /// Start an interactive sub-Codex thread and return its runtime and IO channels.
 ///
 /// Delegates never request approvals, and the returned IO yields their public events.
 /// Its submission channel accepts additional `Op`s for the sub-agent.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_codex_thread_interactive(
-    mut config: Config,
+    config: Config,
     auth_manager: Arc<AuthManager>,
     models_manager: SharedModelsManager,
     parent_session: Arc<Session>,
     parent_ctx: Arc<TurnContext>,
     parent_environments: TurnEnvironmentSnapshot,
+    cancel_token: CancellationToken,
+    subagent_source: SubAgentSource,
+    isolation: codex_extension_api::SessionIsolation,
+    initial_history: Option<InitialHistory>,
+    git_enrichment_policy: GitEnrichmentPolicy,
+    windows_sandbox_proxy_settings_mode: codex_sandboxing::WindowsSandboxProxySettingsMode,
+) -> Result<(Arc<Session>, SessionIo), CodexErr> {
+    run_codex_thread_interactive_in_environments(
+        config,
+        auth_manager,
+        models_manager,
+        parent_session,
+        parent_ctx,
+        DelegateEnvironments::Inherit(parent_environments),
+        cancel_token,
+        subagent_source,
+        isolation,
+        initial_history,
+        git_enrichment_policy,
+        windows_sandbox_proxy_settings_mode,
+    )
+    .await
+}
+
+/// Like [`run_codex_thread_interactive`], with control over the delegate's environments.
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn run_codex_thread_interactive_in_environments(
+    mut config: Config,
+    auth_manager: Arc<AuthManager>,
+    models_manager: SharedModelsManager,
+    parent_session: Arc<Session>,
+    parent_ctx: Arc<TurnContext>,
+    environments: DelegateEnvironments,
     cancel_token: CancellationToken,
     subagent_source: SubAgentSource,
     isolation: codex_extension_api::SessionIsolation,
@@ -102,6 +144,17 @@ pub(crate) async fn run_codex_thread_interactive(
     };
     let mut thread_extension_init = codex_extension_api::ExtensionDataInit::default();
     thread_extension_init.insert(isolation);
+    let (inherited_environments, environment_requests) = match environments {
+        DelegateEnvironments::Inherit(parent_environments) => {
+            let requests = parent_environments
+                .to_selections()
+                .into_iter()
+                .map(TurnEnvironmentSelection::into_request)
+                .collect();
+            (Some(parent_environments), requests)
+        }
+        DelegateEnvironments::Explicit(requests) => (None, requests),
+    };
     let spawn_result = Session::spawn(SessionSpawnArgs {
         startup: Some(Arc::clone(&startup)),
         config,
@@ -147,15 +200,11 @@ pub(crate) async fn run_codex_thread_interactive(
         dynamic_tools: Vec::new(),
         metrics_service_name: None,
         user_shell_override: None,
-        inherited_environments: Some(parent_environments.clone()),
+        inherited_environments,
         inherited_exec_policy: Some(Arc::clone(&parent_session.services.exec_policy)),
         parent_rollout_thread_trace: codex_rollout_trace::ThreadTraceContext::disabled(),
         parent_trace: None,
-        environment_requests: parent_environments
-            .to_selections()
-            .into_iter()
-            .map(TurnEnvironmentSelection::into_request)
-            .collect(),
+        environment_requests,
         thread_extension_init,
         turn_extension_init: Default::default(),
         client_mcp_extensions: parent_session.services.client_mcp_extensions.clone(),
